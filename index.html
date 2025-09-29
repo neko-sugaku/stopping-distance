@@ -67,7 +67,7 @@
                 </div>
 
                 <!-- 路面状況 -->
-                <div>
+                <div class="mb-6">
                     <label for="surface" class="block mb-2 font-bold text-lg">
                         <span class="text-yellow-400">③</span> 路面状況
                     </label>
@@ -78,6 +78,13 @@
                         <option value="0.25">雪道</option>
                         <option value="0.1">凍結した道路 (アイスバーン)</option>
                     </select>
+                </div>
+                
+                <!-- シミュレーション開始ボタン -->
+                <div class="mt-8">
+                     <button id="start-simulation-btn" class="w-full bg-yellow-500 hover:bg-yellow-600 text-gray-900 font-bold py-3 px-4 rounded-lg text-lg transition-colors duration-300">
+                        シミュレーション開始
+                    </button>
                 </div>
             </div>
 
@@ -120,6 +127,19 @@
                 </div>
             </div>
         </main>
+        
+        <!-- Simulation Section -->
+        <section id="simulation-section" class="mt-8 bg-gray-800 p-6 rounded-2xl shadow-2xl">
+            <canvas id="simulation-canvas" width="1000" height="120" class="bg-gray-700 rounded-lg w-full"></canvas>
+            <div class="flex justify-center items-center space-x-6 mt-4 text-sm">
+                <div class="flex items-center"><span class="w-4 h-4 bg-blue-400 rounded-sm mr-2"></span>空走距離</div>
+                <div class="flex items-center"><span class="w-4 h-4 bg-red-400 rounded-sm mr-2"></span>制動距離</div>
+                <div class="flex items-center"><span class="w-4 h-4 bg-yellow-400 rounded-sm mr-2"></span>停止距離</div>
+            </div>
+             <div class="text-center mt-2 text-gray-400 text-xs">
+                <p>⚠️ = 危険認知 / 🚫 = ブレーキ開始</p>
+            </div>
+        </section>
     </div>
 
     <script>
@@ -139,67 +159,80 @@
         
         const commentExampleEl = document.getElementById('comment-example');
         const commentTextEl = document.getElementById('comment-text');
+        
+        const startSimBtn = document.getElementById('start-simulation-btn');
+        const canvas = document.getElementById('simulation-canvas');
+        const ctx = canvas.getContext('2d');
 
         // 定数
         const GRAVITY = 9.8;
 
+        // Global variables for simulation
+        let animationFrameId = null;
+        let currentThinkingDistance = 0;
+        let currentBrakingDistance = 0;
+        let currentStoppingDistance = 0;
+
         // 例とコメントのリスト
         const comments = [
-            { limit: 10, example: "乗用車 約2台分！", text: "思ったより進むね！" },
-            { limit: 20, example: "ボーリングのレーンくらい！", text: "急には止まれない！" },
-            { limit: 25, example: "25mプールと同じくらい！", text: "歩行者がいたら…危ない！" },
-            { limit: 40, example: "路線バスと同じくらい！", text: "これが街中だと思うと怖い…" },
-            { limit: 60, example: "ジャンボジェット機の翼幅！", text: "かなりの距離だよ！" },
-            { limit: 100, example: "サッカーコートの端から端まで！", text: "もう自分の力ではどうにもできない！" },
-            { limit: 150, example: "新幹線の車両6両分！", text: "完全に制御不能！" },
-            { limit: 200, example: "50階建ての高層ビル！", text: "これは本当にマズい状況！" },
-            { limit: 333, example: "東京タワーが横倒しになったくらい！", text: "信じられないくらい危険！！！💀" },
-            { limit: Infinity, example: "東京スカイツリーの半分以上！", text: "絶対ダメ！！！😱" }
+            { limit: 10, example: "乗用車 約2台分！", text: "近くに見えても、すぐには止まれないことを覚えておこう。" },
+            { limit: 20, example: "ボーリングのレーンくらい！", text: "ストライクは気持ちいいけど、人や物にストライクしたら大変なことに…。" },
+            { limit: 30, example: "シロナガスクジラの子供と同じくらい！", text: "地球最大の動物の子供サイズ。それでもぶつかったらひとたまりもないね。" },
+            { limit: 40, example: "ティラノサウルスの全長3匹分！", text: "最強の恐竜が3匹並んだ距離。もう逃げ切れないよ！" },
+            { limit: 50, example: "自由の女神（像本体）の高さ！", text: "あの巨大な女神像が横たわっているのと同じ。すごい距離だ！" },
+            { limit: 60, example: "ピサの斜塔の高さ！", text: "いつ倒れるか分からないスリルより、事故のほうがよっぽどスリリングで危険！" },
+            { limit: 70, example: "国会議事堂の高さ！", text: "日本の中心が横倒しになった距離。居眠り運転なんてとんでもない！" },
+            { limit: 80, example: "ロンドンのビッグ・ベンの高さ！", text: "時を刻む鐘の音も聞こえないほどの高速。時間を巻き戻すことはできないよ。" },
+            { limit: 90, example: "サッカーコート（縦）の最短距離！", text: "オフサイドトラップも通用しない。一瞬でゴールラインを割ってしまう危険な距離。" },
+            { limit: 100, example: "100m走の世界記録保持者でも9秒以上かかる！", text: "人間が全力で走るより速く、この距離を滑走してしまう。もう自分の力ではどうにもできない！" },
+            { limit: 120, example: "奈良の大仏様（台座含め）6体分！", text: "大仏様も驚くほどの距離。後光どころか危険信号が点滅している！" },
+            { limit: 140, example: "太陽の塔の高さ2つ分！", text: "芸術は爆発だ！なんて言ってる場合じゃない。車が大爆発する前に止まって！" },
+            { limit: 160, example: "新幹線の車両6両分！", text: "日本の技術の結晶も、止まれなければただの鉄の塊。安全意識が大事！" },
+            { limit: 200, example: "50階建ての高層ビル！", text: "こんな高さから落ちることを想像してみて。それと同じくらいの衝撃が待っている！" },
+            { limit: 250, example: "豪華客船クイーン・エリザベスの全長！", text: "優雅な船旅とは程遠い。危険な航海に出ているのと同じだよ！" },
+            { limit: 300, example: "エッフェル塔の展望台の高さ！", text: "パリの美しい景色を眺める余裕なんてない。目の前にあるのは危険だけ！" },
+            { limit: 340, example: "東京タワーの高さ！", text: "東京のシンボルが目の前に倒れてくるのと同じ。建設時は命綱なしの作業員もいたとか…。まさに命がけの危険度！" },
+            { limit: 450, example: "エンパイアステートビルの尖塔までの高さ！", text: "キングコングが登ったビルと同じ高さ。映画のパニックシーンが現実になる！" },
+            { limit: 500, example: "F1日本GPが開催される鈴鹿サーキットのホームストレートの半分！", text: "プロレーサーでもないのに、この距離を制御できるわけがない！" },
+            { limit: 640, example: "東京スカイツリーの高さ！", text: "日本一高い建造物が横たわっているのと同じ距離。天にも昇る気持ち、ではなく天に召される危険性！" },
+            { limit: 830, example: "ドバイのブルジュ・ハリファの高さ！", text: "世界一高いビルが目の前に。もはや現実感のない危険な距離…😨" },
+            { limit: 1000, example: "時速100kmなら36秒で到達する距離！", text: "あっという間にこの距離を進んでしまう。ほんの一瞬の油断が命取りに。" },
+            { limit: 1610, example: "アメリカのゴールデン・ゲート・ブリッジ（中央径間）より長い！", text: "世界で最も有名な橋の一つを飛び越える距離。もう車はあなたのコントロール下にはない。" },
+            { limit: 1690, example: "モナコ公国の国土の横幅くらい！", text: "一つの国を横断できてしまうほどの距離を滑走していることに…。想像を絶する危険性！" },
+            { limit: Infinity, example: "F1マシンの最高速なら15秒で走り抜ける距離！", text: "もう何もかもが手遅れ。安全運転がどれだけ大事か、改めて考えよう。😱" }
         ];
 
         // 計算と表示更新を行う関数
         function calculateAndDisplay() {
-            // 入力値の取得
             const speedKmh = parseFloat(speedInput.value);
             const reactionTime = parseFloat(reactionInput.value);
             const frictionCoeff = parseFloat(surfaceSelect.value);
-
-            // 時速(km/h)を秒速(m/s)に変換
             const speedMps = speedKmh / 3.6;
-
-            // 1. 空走距離の計算
             const thinkingDistance = speedMps * reactionTime;
-
-            // 2. 制動距離の計算
             const brakingDistance = (speedMps ** 2) / (2 * frictionCoeff * GRAVITY);
-            
-            // 3. 停止距離の計算
             const stoppingDistance = thinkingDistance + brakingDistance;
 
-            // 結果の表示 (数値)
+            currentThinkingDistance = thinkingDistance;
+            currentBrakingDistance = brakingDistance;
+            currentStoppingDistance = stoppingDistance;
+
             thinkingDistEl.textContent = `${thinkingDistance.toFixed(1)} m`;
             brakingDistEl.textContent = `${brakingDistance.toFixed(1)} m`;
             stoppingDistEl.textContent = `${stoppingDistance.toFixed(1)} m`;
 
-            // 結果の表示 (バー)
-            const totalDistanceForBar = Math.max(stoppingDistance, 1); // 0除算を避ける
+            const totalDistanceForBar = Math.max(stoppingDistance, 1);
             const thinkingPercentage = (thinkingDistance / totalDistanceForBar) * 100;
             const brakingPercentage = (brakingDistance / totalDistanceForBar) * 100;
 
             thinkingBar.style.width = `${thinkingPercentage}%`;
             brakingBar.style.width = `${brakingPercentage}%`;
             
-            // バーにテキストを表示
-            if (thinkingPercentage > 10) thinkingBar.textContent = `${thinkingDistance.toFixed(1)}m`;
-            else thinkingBar.textContent = '';
-            if (brakingPercentage > 10) brakingBar.textContent = `${brakingDistance.toFixed(1)}m`;
-            else brakingBar.textContent = '';
+            if (thinkingPercentage > 10) thinkingBar.textContent = `${thinkingDistance.toFixed(1)}m`; else thinkingBar.textContent = '';
+            if (brakingPercentage > 10) brakingBar.textContent = `${brakingDistance.toFixed(1)}m`; else brakingBar.textContent = '';
 
-
-            // コメントの表示
             let displayed = false;
             for (const comment of comments) {
-                if (stoppingDistance <= comment.limit) {
+                if (stoppingDistance < comment.limit) {
                     commentExampleEl.textContent = `約 ${stoppingDistance.toFixed(0)}m は… ${comment.example}`;
                     commentTextEl.textContent = comment.text;
                     displayed = true;
@@ -211,30 +244,133 @@
                  commentTextEl.textContent = '';
             }
         }
+        
+        function drawArrow(ctx, fromx, fromy, tox, toy, color, text = '') {
+            const headlen = 10;
+            const dx = tox - fromx;
+            const angle = Math.atan2(toy - fromy, dx);
+            
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(fromx, fromy);
+            ctx.lineTo(tox, toy);
+            ctx.stroke();
 
-        // イベントリスナーの設定
-        speedSlider.addEventListener('input', (e) => {
-            speedInput.value = e.target.value;
-            calculateAndDisplay();
-        });
-        speedInput.addEventListener('input', (e) => {
-            speedSlider.value = e.target.value;
-            calculateAndDisplay();
-        });
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(tox, toy);
+            ctx.lineTo(tox - headlen * Math.cos(angle - Math.PI / 6), toy - headlen * Math.sin(angle - Math.PI / 6));
+            ctx.lineTo(tox - headlen * Math.cos(angle + Math.PI / 6), toy - headlen * Math.sin(angle + Math.PI / 6));
+            ctx.closePath();
+            ctx.fill();
 
-        reactionSlider.addEventListener('input', (e) => {
-            reactionInput.value = e.target.value;
-            calculateAndDisplay();
-        });
-        reactionInput.addEventListener('input', (e) => {
-            reactionSlider.value = e.target.value;
-            calculateAndDisplay();
-        });
+            if (text) {
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = 'bold 14px "M PLUS 1p"';
+                ctx.textAlign = 'center';
+                ctx.fillText(text, fromx + dx / 2, fromy - 15);
+            }
+        }
 
+        function startSimulation() {
+            if (currentStoppingDistance < 0.01) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                const roadY = canvas.height - 60;
+                ctx.strokeStyle = '#A0A0A0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, roadY); ctx.lineTo(canvas.width, roadY); ctx.stroke();
+                ctx.save(); ctx.translate(50, roadY - 10); ctx.scale(-1, 1); ctx.font = '30px sans-serif'; ctx.fillText('🚗', 0, 0); ctx.restore();
+                ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 16px "M PLUS 1p"'; ctx.textAlign = 'left'; ctx.fillText('安全に停止しています ✅', 85, roadY - 5);
+                ctx.textAlign = 'center'; return;
+            }
+
+            const canvasWidth = canvas.width, canvasHeight = canvas.height, roadY = canvasHeight - 60, carY = roadY - 10, markerY = roadY - 30, arrowY = roadY + 20, stoppingArrowY = arrowY + 25;
+            const startX = 50, endX = canvasWidth - 50, totalDrawableWidth = endX - startX;
+            const pixelsPerMeter = totalDrawableWidth / currentStoppingDistance;
+            const thinkingDistPixels = currentThinkingDistance * pixelsPerMeter;
+            const speedMps = parseFloat(speedInput.value) / 3.6, reactionTime = parseFloat(reactionInput.value);
+            const deceleration = (currentBrakingDistance > 0) ? (speedMps ** 2) / (2 * currentBrakingDistance) : 0;
+            const brakingDuration = (deceleration > 0) ? (speedMps / deceleration) : 0;
+            const totalSimTime = reactionTime + brakingDuration;
+
+            let startTime = null;
+
+            function animate(timestamp) {
+                if (!startTime) startTime = timestamp;
+                const elapsedSeconds = (timestamp - startTime) / 1000;
+                ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+                ctx.strokeStyle = '#A0A0A0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, roadY); ctx.lineTo(canvasWidth, roadY); ctx.stroke();
+
+                let distanceTraveledMeters;
+                if (elapsedSeconds < reactionTime) {
+                    distanceTraveledMeters = speedMps * elapsedSeconds;
+                } else {
+                    const brakingElapsedSeconds = Math.min(elapsedSeconds - reactionTime, brakingDuration);
+                    const brakingDistanceTraveled = (speedMps * brakingElapsedSeconds) - (0.5 * deceleration * brakingElapsedSeconds ** 2);
+                    distanceTraveledMeters = currentThinkingDistance + brakingDistanceTraveled;
+                }
+                distanceTraveledMeters = Math.min(distanceTraveledMeters, currentStoppingDistance);
+                const carX = startX + distanceTraveledMeters * pixelsPerMeter;
+
+                ctx.font = '30px sans-serif'; ctx.textAlign = 'center';
+                if (elapsedSeconds >= 0) ctx.fillText('⚠️', startX, markerY);
+                if (elapsedSeconds >= reactionTime) ctx.fillText('🚫', startX + thinkingDistPixels, markerY);
+
+                const thinkingEndPos = startX + Math.min(distanceTraveledMeters, currentThinkingDistance) * pixelsPerMeter;
+                drawArrow(ctx, startX, arrowY, thinkingEndPos, arrowY, '#60A5FA');
+                
+                if (elapsedSeconds > reactionTime) {
+                     const brakingStartPos = startX + thinkingDistPixels;
+                     const brakingEndPos = brakingStartPos + (distanceTraveledMeters - currentThinkingDistance) * pixelsPerMeter;
+                     drawArrow(ctx, brakingStartPos, arrowY, brakingEndPos, arrowY, '#F87171');
+                }
+                drawArrow(ctx, startX, stoppingArrowY, carX, stoppingArrowY, '#FBBF24');
+                
+                ctx.save(); ctx.translate(carX, carY); ctx.scale(-1, 1); ctx.font = '30px sans-serif'; ctx.fillText('🚗', 0, 0); ctx.restore();
+
+                if (elapsedSeconds < totalSimTime) {
+                    animationFrameId = requestAnimationFrame(animate);
+                } else {
+                    const finalCarX = startX + currentStoppingDistance * pixelsPerMeter;
+                    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+                    ctx.strokeStyle = '#A0A0A0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, roadY); ctx.lineTo(canvasWidth, roadY); ctx.stroke();
+                    ctx.font = '30px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('⚠️', startX, markerY); ctx.fillText('🚫', startX + thinkingDistPixels, markerY);
+                    drawArrow(ctx, startX, arrowY, startX + thinkingDistPixels, arrowY, '#60A5FA', `${currentThinkingDistance.toFixed(1)}m`);
+                    drawArrow(ctx, startX + thinkingDistPixels, arrowY, finalCarX, arrowY, '#F87171', `${currentBrakingDistance.toFixed(1)}m`);
+                    drawArrow(ctx, startX, stoppingArrowY, finalCarX, stoppingArrowY, '#FBBF24', `${currentStoppingDistance.toFixed(1)}m`);
+                    ctx.save(); ctx.translate(finalCarX, carY); ctx.scale(-1, 1); ctx.font = '30px sans-serif'; ctx.fillText('🚗', 0, 0); ctx.restore();
+                    startSimBtn.disabled = false;
+                    startSimBtn.textContent = 'もう一度シミュレーション';
+                }
+            }
+
+            startSimBtn.disabled = false;
+            startSimBtn.textContent = 'シミュレーションを停止';
+            animationFrameId = requestAnimationFrame(animate);
+        }
+
+        startSimBtn.addEventListener('click', () => {
+            if (startSimBtn.textContent.includes('停止')) {
+                if (animationFrameId) {
+                    cancelAnimationFrame(animationFrameId);
+                    animationFrameId = null;
+                }
+                startSimBtn.textContent = 'シミュレーション開始';
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                const roadY = canvas.height - 60;
+                ctx.strokeStyle = '#A0A0A0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, roadY); ctx.lineTo(canvas.width, roadY); ctx.stroke();
+            } else {
+                startSimulation();
+            }
+        });
+        
+        speedSlider.addEventListener('input', (e) => { speedInput.value = e.target.value; calculateAndDisplay(); });
+        speedInput.addEventListener('input', (e) => { speedSlider.value = e.target.value; calculateAndDisplay(); });
+        reactionSlider.addEventListener('input', (e) => { reactionInput.value = e.target.value; calculateAndDisplay(); });
+        reactionInput.addEventListener('input', (e) => { reactionSlider.value = e.target.value; calculateAndDisplay(); });
         surfaceSelect.addEventListener('change', calculateAndDisplay);
         
-        // 初期表示
         window.onload = calculateAndDisplay;
     </script>
 </body>
 </html>
+
