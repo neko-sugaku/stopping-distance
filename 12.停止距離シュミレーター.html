@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>車の停止距離シミュレーター</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+1p:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'M PLUS 1p', sans-serif;
+        }
+        .result-bar-container {
+            display: flex;
+            width: 100%;
+            height: 40px;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            background-color: #374151;
+            box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.2);
+        }
+        .result-bar {
+            transition: width 0.3s ease-in-out;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 0.875rem;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-4xl mx-auto">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-red-500 to-pink-500">停止距離シミュレーター</h1>
+            <p class="mt-2 text-gray-300">「あっ！」と思ってから、車が完全に止まるまでの距離は？</p>
+        </header>
+
+        <main class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- 入力セクション -->
+            <div class="bg-gray-800 p-6 rounded-2xl shadow-2xl">
+                <h2 class="text-2xl font-bold mb-6 border-b-2 border-yellow-400 pb-2">条件を入力してください</h2>
+
+                <!-- 速度 -->
+                <div class="mb-6">
+                    <label for="speed" class="block mb-2 font-bold text-lg">
+                        <span class="text-yellow-400">①</span> 車の速度 (km/h)
+                    </label>
+                    <div class="flex items-center space-x-4">
+                        <input type="range" id="speed-slider" min="0" max="200" value="40" class="w-full h-3 bg-gray-700 rounded-lg appearance-none cursor-pointer range-lg">
+                        <input type="number" id="speed-input" min="0" max="200" value="40" class="w-24 bg-gray-700 text-white font-bold text-center rounded-lg p-2">
+                    </div>
+                </div>
+
+                <!-- 反応時間 -->
+                <div class="mb-6">
+                    <label for="reaction" class="block mb-2 font-bold text-lg">
+                        <span class="text-yellow-400">②</span> 反応時間 (秒)
+                    </label>
+                    <div class="flex items-center space-x-4">
+                        <input type="range" id="reaction-slider" min="0.1" max="2.0" step="0.1" value="1.0" class="w-full h-3 bg-gray-700 rounded-lg appearance-none cursor-pointer range-lg">
+                        <input type="number" id="reaction-input" min="0.1" max="2.0" step="0.1" value="1.0" class="w-24 bg-gray-700 text-white font-bold text-center rounded-lg p-2">
+                    </div>
+                    <p class="text-sm text-gray-400 mt-2">※危険を察知してからブレーキを踏むまでの時間。一般的には0.75秒〜1秒です。</p>
+                </div>
+
+                <!-- 路面状況 -->
+                <div>
+                    <label for="surface" class="block mb-2 font-bold text-lg">
+                        <span class="text-yellow-400">③</span> 路面状況
+                    </label>
+                    <select id="surface" class="w-full bg-gray-700 text-white rounded-lg p-3 cursor-pointer">
+                        <option value="0.8">乾いた道路 (アスファルト)</option>
+                        <option value="0.6">濡れた道路 (雨)</option>
+                        <option value="0.4">砂利道</option>
+                        <option value="0.25">雪道</option>
+                        <option value="0.1">凍結した道路 (アイスバーン)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- 結果セクション -->
+            <div class="bg-gray-800 p-6 rounded-2xl shadow-2xl flex flex-col justify-between">
+                <div>
+                    <h2 class="text-2xl font-bold mb-4 border-b-2 border-red-500 pb-2">計算結果</h2>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <span class="font-bold text-blue-400">空走距離:</span>
+                            <span id="thinking-distance" class="text-2xl font-bold ml-2">0.0 m</span>
+                        </div>
+                        <div>
+                            <span class="font-bold text-red-400">制動距離:</span>
+                            <span id="braking-distance" class="text-2xl font-bold ml-2">0.0 m</span>
+                        </div>
+                        <div class="border-t border-gray-600 pt-4 mt-4">
+                            <span class="font-bold text-xl text-yellow-400">停止距離:</span>
+                            <span id="stopping-distance" class="text-5xl font-black ml-2">0.0 m</span>
+                        </div>
+                    </div>
+
+                    <div class="mt-6">
+                        <h3 class="font-bold mb-2">距離の内訳:</h3>
+                        <div class="result-bar-container">
+                            <div id="thinking-bar" class="result-bar bg-blue-500"></div>
+                            <div id="braking-bar" class="result-bar bg-red-500"></div>
+                        </div>
+                         <div class="flex justify-between text-xs mt-1 text-gray-400">
+                            <span>空走</span>
+                            <span>制動</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="comment-box" class="mt-8 text-center bg-gray-900 p-4 rounded-lg border-2 border-dashed border-gray-600 transition-all duration-300">
+                    <p id="comment-example" class="text-xl font-bold text-yellow-300"></p>
+                    <p id="comment-text" class="text-md text-gray-300 mt-1"></p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // DOM要素の取得
+        const speedSlider = document.getElementById('speed-slider');
+        const speedInput = document.getElementById('speed-input');
+        const reactionSlider = document.getElementById('reaction-slider');
+        const reactionInput = document.getElementById('reaction-input');
+        const surfaceSelect = document.getElementById('surface');
+
+        const thinkingDistEl = document.getElementById('thinking-distance');
+        const brakingDistEl = document.getElementById('braking-distance');
+        const stoppingDistEl = document.getElementById('stopping-distance');
+
+        const thinkingBar = document.getElementById('thinking-bar');
+        const brakingBar = document.getElementById('braking-bar');
+        
+        const commentExampleEl = document.getElementById('comment-example');
+        const commentTextEl = document.getElementById('comment-text');
+
+        // 定数
+        const GRAVITY = 9.8;
+
+        // 例とコメントのリスト
+        const comments = [
+            { limit: 10, example: "乗用車 約2台分！", text: "思ったより進むね！" },
+            { limit: 20, example: "ボーリングのレーンくらい！", text: "急には止まれない！" },
+            { limit: 25, example: "25mプールと同じくらい！", text: "歩行者がいたら…危ない！" },
+            { limit: 40, example: "路線バスと同じくらい！", text: "これが街中だと思うと怖い…" },
+            { limit: 60, example: "ジャンボジェット機の翼幅！", text: "かなりの距離だよ！" },
+            { limit: 100, example: "サッカーコートの端から端まで！", text: "もう自分の力ではどうにもできない！" },
+            { limit: 150, example: "新幹線の車両6両分！", text: "完全に制御不能！" },
+            { limit: 200, example: "50階建ての高層ビル！", text: "これは本当にマズい状況！" },
+            { limit: 333, example: "東京タワーが横倒しになったくらい！", text: "信じられないくらい危険！！！💀" },
+            { limit: Infinity, example: "東京スカイツリーの半分以上！", text: "絶対ダメ！！！😱" }
+        ];
+
+        // 計算と表示更新を行う関数
+        function calculateAndDisplay() {
+            // 入力値の取得
+            const speedKmh = parseFloat(speedInput.value);
+            const reactionTime = parseFloat(reactionInput.value);
+            const frictionCoeff = parseFloat(surfaceSelect.value);
+
+            // 時速(km/h)を秒速(m/s)に変換
+            const speedMps = speedKmh / 3.6;
+
+            // 1. 空走距離の計算
+            const thinkingDistance = speedMps * reactionTime;
+
+            // 2. 制動距離の計算
+            const brakingDistance = (speedMps ** 2) / (2 * frictionCoeff * GRAVITY);
+            
+            // 3. 停止距離の計算
+            const stoppingDistance = thinkingDistance + brakingDistance;
+
+            // 結果の表示 (数値)
+            thinkingDistEl.textContent = `${thinkingDistance.toFixed(1)} m`;
+            brakingDistEl.textContent = `${brakingDistance.toFixed(1)} m`;
+            stoppingDistEl.textContent = `${stoppingDistance.toFixed(1)} m`;
+
+            // 結果の表示 (バー)
+            const totalDistanceForBar = Math.max(stoppingDistance, 1); // 0除算を避ける
+            const thinkingPercentage = (thinkingDistance / totalDistanceForBar) * 100;
+            const brakingPercentage = (brakingDistance / totalDistanceForBar) * 100;
+
+            thinkingBar.style.width = `${thinkingPercentage}%`;
+            brakingBar.style.width = `${brakingPercentage}%`;
+            
+            // バーにテキストを表示
+            if (thinkingPercentage > 10) thinkingBar.textContent = `${thinkingDistance.toFixed(1)}m`;
+            else thinkingBar.textContent = '';
+            if (brakingPercentage > 10) brakingBar.textContent = `${brakingDistance.toFixed(1)}m`;
+            else brakingBar.textContent = '';
+
+
+            // コメントの表示
+            let displayed = false;
+            for (const comment of comments) {
+                if (stoppingDistance <= comment.limit) {
+                    commentExampleEl.textContent = `約 ${stoppingDistance.toFixed(0)}m は… ${comment.example}`;
+                    commentTextEl.textContent = comment.text;
+                    displayed = true;
+                    break;
+                }
+            }
+            if (!displayed || stoppingDistance < 1) {
+                 commentExampleEl.textContent = '安全運転を心がけましょう';
+                 commentTextEl.textContent = '';
+            }
+        }
+
+        // イベントリスナーの設定
+        speedSlider.addEventListener('input', (e) => {
+            speedInput.value = e.target.value;
+            calculateAndDisplay();
+        });
+        speedInput.addEventListener('input', (e) => {
+            speedSlider.value = e.target.value;
+            calculateAndDisplay();
+        });
+
+        reactionSlider.addEventListener('input', (e) => {
+            reactionInput.value = e.target.value;
+            calculateAndDisplay();
+        });
+        reactionInput.addEventListener('input', (e) => {
+            reactionSlider.value = e.target.value;
+            calculateAndDisplay();
+        });
+
+        surfaceSelect.addEventListener('change', calculateAndDisplay);
+        
+        // 初期表示
+        window.onload = calculateAndDisplay;
+    </script>
+</body>
+</html>
