@@ -6,6 +6,7 @@
     <title>車の停止距離シミュレーター</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=M+PLUS+1p:wght@400;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
             font-family: 'M PLUS 1p', sans-serif;
@@ -69,14 +70,14 @@
                 <!-- 路面状況 -->
                 <div class="mb-6">
                     <label for="surface" class="block mb-2 font-bold text-lg">
-                        <span class="text-yellow-400">③</span> 路面状況
+                        <span class="text-yellow-400">③</span> 路面状況 (摩擦係数μ)
                     </label>
                     <select id="surface" class="w-full bg-gray-700 text-white rounded-lg p-3 cursor-pointer">
-                        <option value="0.8">乾いた道路 (アスファルト)</option>
-                        <option value="0.6">濡れた道路 (雨)</option>
-                        <option value="0.4">砂利道</option>
-                        <option value="0.25">雪道</option>
-                        <option value="0.1">凍結した道路 (アイスバーン)</option>
+                        <option value="0.8">乾いた道路 (アスファルト) (μ=0.8)</option>
+                        <option value="0.6">濡れた道路 (雨) (μ=0.6)</option>
+                        <option value="0.4">砂利道 (μ=0.4)</option>
+                        <option value="0.25">雪道 (μ=0.25)</option>
+                        <option value="0.1">凍結した道路 (アイスバーン) (μ=0.1)</option>
                     </select>
                 </div>
                 
@@ -93,18 +94,22 @@
                 <div>
                     <h2 class="text-2xl font-bold mb-4 border-b-2 border-red-500 pb-2">計算結果</h2>
                     
-                    <div class="space-y-4">
+                    <div class="space-y-3">
                         <div>
                             <span class="font-bold text-blue-400">空走距離:</span>
                             <span id="thinking-distance" class="text-2xl font-bold ml-2">0.0 m</span>
+                            <p class="text-xs text-gray-400" id="thinking-formula">= 0.0 m/s × 0.0 s</p>
                         </div>
                         <div>
                             <span class="font-bold text-red-400">制動距離:</span>
                             <span id="braking-distance" class="text-2xl font-bold ml-2">0.0 m</span>
+                            <p class="text-xs text-gray-400" id="braking-formula">= (0.0 m/s)² / (2 × 0.0 × 9.8)</p>
+                             <p class="text-xs text-gray-400 mt-1">※制動距離は速度の<span class="font-bold text-yellow-300">2乗</span>に比例する (二次関数)</p>
                         </div>
-                        <div class="border-t border-gray-600 pt-4 mt-4">
+                        <div class="border-t border-gray-600 pt-3 mt-3">
                             <span class="font-bold text-xl text-yellow-400">停止距離:</span>
                             <span id="stopping-distance" class="text-5xl font-black ml-2">0.0 m</span>
+                            <p class="text-xs text-gray-400" id="stopping-formula">= 0.0 m + 0.0 m</p>
                         </div>
                     </div>
 
@@ -121,7 +126,7 @@
                     </div>
                 </div>
 
-                <div id="comment-box" class="mt-8 text-center bg-gray-900 p-4 rounded-lg border-2 border-dashed border-gray-600 transition-all duration-300">
+                <div id="comment-box" class="mt-6 text-center bg-gray-900 p-4 rounded-lg border-2 border-dashed border-gray-600 transition-all duration-300">
                     <p id="comment-example" class="text-xl font-bold text-yellow-300"></p>
                     <p id="comment-text" class="text-md text-gray-300 mt-1"></p>
                 </div>
@@ -140,6 +145,20 @@
                 <p>⚠️ = 危険認知 / 🚫 = ブレーキ開始</p>
             </div>
         </section>
+        
+        <!-- Quiz Section -->
+        <section id="quiz-section" class="mt-8 bg-gray-800 p-6 rounded-2xl shadow-2xl">
+            <h2 class="text-2xl font-bold mb-4 border-b-2 border-green-400 pb-2">学習クイズモード 🧠</h2>
+            <p class="text-gray-300 mb-4">シミュレーターで学んだ知識を試してみよう！二次関数の計算はできるかな？</p>
+            <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4 mb-4">
+                <button id="prediction-quiz-btn" class="flex-1 bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg">停止距離を予測しよう！</button>
+                <button id="reverse-quiz-btn" class="flex-1 bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-lg">安全な速度を逆算しよう！</button>
+            </div>
+            <div id="quiz-content" class="bg-gray-900 p-4 rounded-lg border-2 border-dashed border-gray-600 min-h-[150px] flex items-center justify-center">
+                <p class="text-gray-400">上のボタンから挑戦したいクイズを選んでください。</p>
+            </div>
+        </section>
+
     </div>
 
     <script>
@@ -153,6 +172,10 @@
         const thinkingDistEl = document.getElementById('thinking-distance');
         const brakingDistEl = document.getElementById('braking-distance');
         const stoppingDistEl = document.getElementById('stopping-distance');
+        
+        const thinkingFormulaEl = document.getElementById('thinking-formula');
+        const brakingFormulaEl = document.getElementById('braking-formula');
+        const stoppingFormulaEl = document.getElementById('stopping-formula');
 
         const thinkingBar = document.getElementById('thinking-bar');
         const brakingBar = document.getElementById('braking-bar');
@@ -163,6 +186,13 @@
         const startSimBtn = document.getElementById('start-simulation-btn');
         const canvas = document.getElementById('simulation-canvas');
         const ctx = canvas.getContext('2d');
+
+        // Quiz elements
+        const predictionQuizBtn = document.getElementById('prediction-quiz-btn');
+        const reverseQuizBtn = document.getElementById('reverse-quiz-btn');
+        const quizContentEl = document.getElementById('quiz-content');
+        let quizCorrectAnswer = null;
+
 
         // 定数
         const GRAVITY = 9.8;
@@ -196,7 +226,7 @@
             { limit: 500, example: "F1日本GPが開催される鈴鹿サーキットのホームストレートの半分！", text: "プロレーサーでもないのに、この距離を制御できるわけがない！" },
             { limit: 640, example: "東京スカイツリーの高さ！", text: "日本一高い建造物が横たわっているのと同じ距離。天にも昇る気持ち、ではなく天に召される危険性！" },
             { limit: 830, example: "ドバイのブルジュ・ハリファの高さ！", text: "世界一高いビルが目の前に。もはや現実感のない危険な距離…😨" },
-            { limit: 1000, example: "時速100kmなら36秒で到達する距離！", text: "あっという間にこの距離を進んでしまう。ほんの一瞬の油断が命取りに。" },
+            { limit: 1000, example: "時を速100kmなら36秒で到達する距離！", text: "あっという間にこの距離を進んでしまう。ほんの一瞬の油断が命取りに。" },
             { limit: 1610, example: "アメリカのゴールデン・ゲート・ブリッジ（中央径間）より長い！", text: "世界で最も有名な橋の一つを飛び越える距離。もう車はあなたのコントロール下にはない。" },
             { limit: 1690, example: "モナコ公国の国土の横幅くらい！", text: "一つの国を横断できてしまうほどの距離を滑走していることに…。想像を絶する危険性！" },
             { limit: Infinity, example: "F1マシンの最高速なら15秒で走り抜ける距離！", text: "もう何もかもが手遅れ。安全運転がどれだけ大事か、改めて考えよう。😱" }
@@ -209,7 +239,7 @@
             const frictionCoeff = parseFloat(surfaceSelect.value);
             const speedMps = speedKmh / 3.6;
             const thinkingDistance = speedMps * reactionTime;
-            const brakingDistance = (speedMps ** 2) / (2 * frictionCoeff * GRAVITY);
+            const brakingDistance = (frictionCoeff > 0) ? (speedMps ** 2) / (2 * frictionCoeff * GRAVITY) : 0;
             const stoppingDistance = thinkingDistance + brakingDistance;
 
             currentThinkingDistance = thinkingDistance;
@@ -219,6 +249,12 @@
             thinkingDistEl.textContent = `${thinkingDistance.toFixed(1)} m`;
             brakingDistEl.textContent = `${brakingDistance.toFixed(1)} m`;
             stoppingDistEl.textContent = `${stoppingDistance.toFixed(1)} m`;
+
+            // Update formulas
+            thinkingFormulaEl.textContent = `= ${speedMps.toFixed(1)} m/s × ${reactionTime.toFixed(1)} s`;
+            brakingFormulaEl.textContent = `= (${speedMps.toFixed(1)} m/s)² / (2 × ${frictionCoeff} × 9.8)`;
+            stoppingFormulaEl.textContent = `= ${thinkingDistance.toFixed(1)} m + ${brakingDistance.toFixed(1)} m`;
+
 
             const totalDistanceForBar = Math.max(stoppingDistance, 1);
             const thinkingPercentage = (thinkingDistance / totalDistanceForBar) * 100;
@@ -269,7 +305,7 @@
                 ctx.fillStyle = '#FFFFFF';
                 ctx.font = 'bold 14px "M PLUS 1p"';
                 ctx.textAlign = 'center';
-                ctx.fillText(text, fromx + dx / 2, fromy - 15);
+                ctx.fillText(text, fromx + dx / 2, fromy - 8);
             }
         }
 
@@ -342,7 +378,6 @@
                     startSimBtn.textContent = 'もう一度シミュレーション';
                 }
             }
-
             startSimBtn.disabled = false;
             startSimBtn.textContent = 'シミュレーションを停止';
             animationFrameId = requestAnimationFrame(animate);
@@ -363,6 +398,125 @@
             }
         });
         
+        // Quiz Logic
+        function generatePredictionQuiz() {
+            const easySpeeds = [
+                { kmh: 36, mps: 10 },
+                { kmh: 54, mps: 15 },
+                { kmh: 72, mps: 20 },
+                { kmh: 90, mps: 25 },
+                { kmh: 108, mps: 30 }
+            ];
+            const easyReactionTimes = [1.0, 1.5, 2.0];
+
+            const speed = easySpeeds[Math.floor(Math.random() * easySpeeds.length)];
+            const reactionTime = easyReactionTimes[Math.floor(Math.random() * easyReactionTimes.length)];
+            
+            const surfaceOptions = [
+                { text: '乾いた道路 (μ=0.8)', value: 0.8 },
+                { text: '濡れた道路 (μ=0.6)', value: 0.6 },
+                { text: '雪道 (μ=0.25)', value: 0.25 },
+            ];
+            const surface = surfaceOptions[Math.floor(Math.random() * surfaceOptions.length)];
+
+            const thinkingDistance = speed.mps * reactionTime;
+            const brakingDistance = (speed.mps ** 2) / (2 * surface.value * GRAVITY);
+            quizCorrectAnswer = thinkingDistance + brakingDistance;
+
+            quizContentEl.innerHTML = `
+                <div class="w-full text-left">
+                    <p class="font-bold text-lg mb-2">【問題】</p>
+                    <p>速度 <span class="text-yellow-300 font-bold">${speed.kmh} km/h</span>、反応時間 <span class="text-yellow-300 font-bold">${reactionTime} 秒</span>で、<span class="text-yellow-300 font-bold">${surface.text}</span> を走行中、危険を察知しました。</p>
+                    <p class="font-bold mt-2">停止距離は 約何m になるか計算してみよう！（小数点第一位まで）</p>
+                    
+                    <div class="mt-4 p-2 bg-gray-800 rounded-lg">
+                        <p class="text-sm font-bold">ヒント💡</p>
+                        <p class="text-xs text-gray-400">1. 速度を km/h から m/s に変換 → <span class="font-mono">${speed.kmh} ÷ 3.6 = ${speed.mps} m/s</span></p>
+                        <p class="text-xs text-gray-400">2. 制動距離を二次関数で計算 → <span class="font-mono">(${speed.mps})² / (2 × ${surface.value} × 9.8)</span></p>
+                        <p class="text-xs text-gray-400">3. 空走距離と制動距離を足す！</p>
+                    </div>
+
+                    <div class="mt-4 flex items-center">
+                        <input type="number" id="quiz-answer" class="w-full bg-gray-700 text-white font-bold text-center rounded-lg p-2" placeholder="答えをここに入力">
+                        <button id="quiz-submit" class="ml-2 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">回答</button>
+                    </div>
+                    <div id="quiz-feedback" class="mt-2 text-center font-bold"></div>
+                </div>
+            `;
+
+            document.getElementById('quiz-submit').addEventListener('click', checkQuizAnswer);
+        }
+        
+        function generateReverseQuiz() {
+            const easySpeeds = [
+                { kmh: 36, mps: 10 },
+                { kmh: 54, mps: 15 },
+                { kmh: 72, mps: 20 },
+                { kmh: 90, mps: 25 },
+                { kmh: 108, mps: 30 }
+            ];
+            const speed = easySpeeds[Math.floor(Math.random() * easySpeeds.length)];
+
+             const surfaceOptions = [
+                { text: '乾いた道路 (μ=0.8)', value: 0.8 },
+                { text: '濡れた道路 (μ=0.6)', value: 0.6 },
+                { text: '砂利道 (μ=0.4)', value: 0.4 },
+            ];
+            const surface = surfaceOptions[Math.floor(Math.random() * surfaceOptions.length)];
+
+            // Calculate braking distance from the clean speed, then round it for the question
+            const idealBrakingDistance = (speed.mps ** 2) / (2 * surface.value * GRAVITY);
+            const brakingDistanceForQuestion = Math.round(idealBrakingDistance * 10) / 10; // Round to 1 decimal place
+
+            // The correct answer is the original clean speed in km/h
+            quizCorrectAnswer = speed.kmh;
+
+            quizContentEl.innerHTML = `
+                <div class="w-full text-left">
+                    <p class="font-bold text-lg mb-2">【問題】</p>
+                    <p><span class="text-yellow-300 font-bold">${surface.text}</span> を走行中に急ブレーキをかけたところ、制動距離は <span class="text-yellow-300 font-bold">${brakingDistanceForQuestion} m</span> でした。</p>
+                    <p class="font-bold mt-2">ブレーキをかける直前の速度は 約何km/h だったか計算してみよう！（整数で答えよう）</p>
+                    
+                    <div class="mt-4 p-2 bg-gray-800 rounded-lg">
+                        <p class="text-sm font-bold">ヒント💡</p>
+                        <p class="text-xs text-gray-400">1. 制動距離の公式から、速度(m/s)を逆算しよう。</p>
+                        <p class="text-xs text-gray-400"><span class="font-mono">速度(m/s) = √(2 × ${brakingDistanceForQuestion} × ${surface.value} × 9.8)</span></p>
+                        <p class="text-xs text-gray-400">2. 速度(m/s)をkm/hに変換 → <span class="font-mono">答え × 3.6</span></p>
+                    </div>
+
+                    <div class="mt-4 flex items-center">
+                        <input type="number" id="quiz-answer" class="w-full bg-gray-700 text-white font-bold text-center rounded-lg p-2" placeholder="答えをここに入力">
+                        <button id="quiz-submit" class="ml-2 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">回答</button>
+                    </div>
+                    <div id="quiz-feedback" class="mt-2 text-center font-bold"></div>
+                </div>
+            `;
+             document.getElementById('quiz-submit').addEventListener('click', checkQuizAnswer);
+        }
+
+        function checkQuizAnswer() {
+            const userAnswer = parseFloat(document.getElementById('quiz-answer').value);
+            const feedbackEl = document.getElementById('quiz-feedback');
+            
+            if (isNaN(userAnswer)) {
+                feedbackEl.textContent = '数値を入力してください。';
+                feedbackEl.className = 'mt-2 text-center font-bold text-yellow-400';
+                return;
+            }
+
+            const margin = quizCorrectAnswer * 0.05; // 5%の誤差を許容
+            if (Math.abs(userAnswer - quizCorrectAnswer) <= margin) {
+                feedbackEl.textContent = `正解！🎉 素晴らしい！ 答えは約 ${quizCorrectAnswer.toFixed(1)} です。`;
+                feedbackEl.className = 'mt-2 text-center font-bold text-green-400';
+            } else {
+                feedbackEl.textContent = `おしい！😢 正解は 約 ${quizCorrectAnswer.toFixed(1)} です。ヒントを参考に再挑戦してみよう！`;
+                feedbackEl.className = 'mt-2 text-center font-bold text-red-400';
+            }
+        }
+        
+        predictionQuizBtn.addEventListener('click', generatePredictionQuiz);
+        reverseQuizBtn.addEventListener('click', generateReverseQuiz);
+        
         speedSlider.addEventListener('input', (e) => { speedInput.value = e.target.value; calculateAndDisplay(); });
         speedInput.addEventListener('input', (e) => { speedSlider.value = e.target.value; calculateAndDisplay(); });
         reactionSlider.addEventListener('input', (e) => { reactionInput.value = e.target.value; calculateAndDisplay(); });
@@ -373,4 +527,5 @@
     </script>
 </body>
 </html>
+
 
